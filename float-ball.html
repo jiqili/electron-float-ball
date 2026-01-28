@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>悬浮球</title>
+  <style>
+    html,
+    body {
+      width: 40px;
+      height: 40px;
+      margin: 0;
+      padding: 0;
+      background: transparent;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    /* 40x40 容器 */
+    .container {
+      position: relative;
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      -webkit-app-region: drag;
+    }
+
+    .ball {
+      position: relative;
+      width: 40px;
+      height: 40px;
+      border-radius: 20px;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      -webkit-app-region: no-drag;
+      background: white;
+      z-index: 100;
+      opacity: 0;
+      transition: opacity 300ms ease-in-out;
+    }
+
+    .ball.fade-in {
+      opacity: 1;
+    }
+
+    .icon {
+      position: relative;
+      z-index: 1;
+      width: 24px;
+      height: 24px;
+      display: block;
+      pointer-events: none;
+      user-select: none;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <div class="ball" id="ballHot">
+      <img class="icon" src="icon.svg" alt="icon" />
+    </div>
+  </div>
+
+  <script>
+    const ball = document.getElementById('ballHot');
+
+    // 监听主进程发送的淡入淡出事件
+    window.electronAPI?.on?.('window:fade-in', () => {
+      ball?.classList.add('fade-in');
+    });
+
+    window.electronAPI?.on?.('window:fade-out', () => {
+      ball?.classList.remove('fade-in');
+    });
+
+    // 拖动状态
+    let dragging = false;
+    let dragStartTime = 0;
+    const clickThresholdMs = 200; // 200ms 内释放算点击
+
+    // 按下事件：开始拖动
+    ball.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      dragging = true;
+      dragStartTime = Date.now();
+      window.electronAPI?.send?.('app:drag:start');
+      ball.setPointerCapture(e.pointerId);
+    });
+
+    // 释放事件：结束拖动或触发点击
+    const finish = (e) => {
+      if (!dragging) return;
+
+      const dragDuration = Date.now() - dragStartTime;
+      const isClick = dragDuration < clickThresholdMs;
+
+      dragging = false;
+      window.electronAPI?.send?.('app:drag:stop');
+      try {
+        ball.releasePointerCapture(e.pointerId);
+      } catch (_) {}
+
+      // 快速点击：切换到输入框
+      if (isClick) {
+        setTimeout(async () => {
+          await window.electronAPI?.invoke?.('app:input:toggle');
+        }, 50);
+      }
+    };
+
+    ball.addEventListener('pointerup', finish);
+    ball.addEventListener('pointercancel', finish);
+  </script>
+</body>
+</html>

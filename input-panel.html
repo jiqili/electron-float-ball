@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>输入框面板</title>
+  <style>
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      user-select: none;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    }
+
+    /* 圆角胶囊容器，右侧包含悬浮球 */
+    .panel {
+      height: 40px;
+      width: 180px;
+      box-sizing: border-box;
+      background: #ffffff;
+      border-radius: 20px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 0 0 16px;
+      box-shadow: 0 1px 6px rgba(0, 0, 0, 0.15);
+      overflow: hidden;
+      /* 淡入淡出动画 - 300ms */
+      opacity: 0;
+      transition: opacity 300ms ease-in-out;
+    }
+
+    .panel.fade-in {
+      opacity: 1;
+    }
+
+    /* 右侧悬浮球：完全复制悬浮球窗口样式 */
+    .float-ball {
+      position: relative;
+      width: 40px;
+      height: 40px;
+      border-radius: 20px;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      background: white;
+      flex-shrink: 0;
+    }
+
+    .float-ball .icon {
+      position: relative;
+      z-index: 1;
+      width: 24px;
+      height: 24px;
+      display: block;
+      pointer-events: none;
+      user-select: none;
+    }
+
+    input {
+      flex: 1;
+      min-width: 0;
+      height: 28px;
+      border: none;
+      outline: none;
+      background: transparent;
+      font-size: 14px;
+      color: #111827;
+    }
+
+    input::placeholder {
+      color: rgba(17, 24, 39, 0.45);
+    }
+  </style>
+</head>
+
+<body>
+  <div class="panel">
+    <input id="wordInput" type="text" placeholder="输入内容…" />
+    <div class="float-ball" id="panelBall">
+      <img class="icon" src="icon.svg" alt="icon" />
+    </div>
+  </div>
+
+  <script>
+    const input = document.getElementById('wordInput');
+    const panel = document.querySelector('.panel');
+    const panelBall = document.getElementById('panelBall');
+
+    // 动画状态标记
+    let isAnimating = false;
+
+    // 监听主进程发送的淡入淡出事件
+    window.electronAPI?.on?.('window:fade-in', () => {
+      isAnimating = true;
+      panel?.classList.add('fade-in');
+      setTimeout(() => {
+        input?.focus?.();
+        isAnimating = false;
+      }, 300);
+    });
+
+    window.electronAPI?.on?.('window:fade-out', () => {
+      isAnimating = true;
+      panel?.classList.remove('fade-in');
+      setTimeout(() => {
+        isAnimating = false;
+      }, 300);
+    });
+
+    // 拖动状态
+    let dragging = false;
+    let dragStartTime = 0;
+    const clickThresholdMs = 200; // 200ms 内释放算点击
+
+    // 按下事件：开始拖动
+    panelBall?.addEventListener('pointerdown', (e) => {
+      // 动画中禁止拖动
+      if (isAnimating) return;
+
+      e.preventDefault();
+      dragging = true;
+      dragStartTime = Date.now();
+      window.electronAPI?.send?.('app:drag:start');
+      panelBall.setPointerCapture(e.pointerId);
+    });
+
+    // 释放事件：结束拖动或触发点击
+    const finish = async (e) => {
+      if (!dragging) return;
+
+      const dragDuration = Date.now() - dragStartTime;
+      const isClick = dragDuration < clickThresholdMs;
+
+      dragging = false;
+      window.electronAPI?.send?.('app:drag:stop');
+      try {
+        panelBall.releasePointerCapture(e.pointerId);
+      } catch (_) {}
+
+      // 快速点击：收起输入框
+      if (isClick) {
+        await window.electronAPI?.invoke?.('app:input:toggle');
+      }
+    };
+
+    panelBall?.addEventListener('pointerup', finish);
+    panelBall?.addEventListener('pointercancel', finish);
+  </script>
+</body>
+</html>
